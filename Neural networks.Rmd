@@ -1,0 +1,257 @@
+---
+title: "Assignment 4"
+author: "Rohit K"
+date: "March 1, 2019"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(magrittr)
+library(Metrics)
+library(plotly)
+library(corrplot)
+library(PerformanceAnalytics)
+library(Hmisc)
+library(knitr)
+library(mctest)
+library(nnet)
+library(dummies)
+#install.packages("dummies")
+setwd("C:/Users/Rohit/Documents/Spring Sem 2/Data mining/Assignment 4")
+airline<-read.csv("Individual Assignment 1 Airline Data v2.csv")
+airline$FARE<-gsub(pattern="\\$",replacement="",x=airline$FARE)
+airline$FARE <- as.integer(airline$FARE)
+airline$S_INCOME<-gsub(pattern="\\$",replacement="",x=airline$S_INCOME)
+airline$S_INCOME<-gsub(pattern=",",replacement="",x=airline$S_INCOME)
+airline$S_INCOME <- as.integer(airline$S_INCOME)
+airline$E_INCOME<-gsub(pattern="\\$",replacement="",x=airline$E_INCOME)
+airline$E_INCOME<-gsub(pattern=",",replacement="",x=airline$E_INCOME)
+airline$E_INCOME <- as.integer(airline$E_INCOME)
+
+#1b
+str(airline$VACATION)
+airline$VACATION<-as.numeric(airline$VACATION)-1
+airline$VACATION_Yes=as.numeric(airline$VACATION==1)
+airline$VACATION_No=as.numeric(airline$VACATION==0)
+
+str(airline$SW)
+airline$SW<-as.numeric(airline$SW)-1
+airline$SW_Yes=as.numeric(airline$SW==1)
+airline$SW_No=as.numeric(airline$SW==0)
+
+str(airline$SLOT)
+airline$SLOT<-as.numeric(airline$SLOT)-1
+airline$SLOT_Free=as.numeric(airline$SLOT==1)
+airline$SLOT_Controlled=as.numeric(airline$SLOT==0)
+
+str(airline$GATE)
+airline$GATE<-as.numeric(airline$GATE)-1
+airline$GATE_Free=as.numeric(airline$GATE==1)
+airline$GATE_Constrained=as.numeric(airline$GATE==0)
+
+#1d
+airline<-airline[complete.cases(airline),]
+
+#1c
+airline$COUPON = (airline$COUPON-min(airline$COUPON))/(max(airline$COUPON)-min(airline$COUPON))
+airline$NEW = (airline$NEW-min(airline$NEW))/(max(airline$NEW)-min(airline$NEW))
+airline$HI = (airline$HI-min(airline$HI))/(max(airline$HI)-min(airline$HI))
+airline$S_INCOME = (airline$S_INCOME-min(airline$S_INCOME))/(max(airline$S_INCOME)-min(airline$S_INCOME))
+airline$E_INCOME = (airline$E_INCOME-min(airline$E_INCOME))/(max(airline$E_INCOME)-min(airline$E_INCOME))
+airline$S_POP = (airline$S_POP-min(airline$S_POP))/(max(airline$S_POP)-min(airline$S_POP))
+airline$E_POP = (airline$E_POP-min(airline$E_POP))/(max(airline$E_POP)-min(airline$E_POP))
+airline$PAX = (airline$PAX-min(airline$PAX))/(max(airline$PAX)-min(airline$PAX))
+airline$DISTANCE = (airline$DISTANCE-min(airline$DISTANCE))/(max(airline$DISTANCE)-min(airline$DISTANCE))
+airline$FARE = (airline$FARE-min(airline$FARE))/(max(airline$FARE)-min(airline$FARE))
+
+#1e
+set.seed(71923)
+
+#1f
+splitrule<-sample(x = nrow(airline), size = nrow(airline)*0.6)
+df_train<-airline[splitrule,]
+df_test<-airline[-splitrule,]
+
+#2a
+
+fit1<-glm(SW ~ VACATION + SLOT + HI + FARE + DISTANCE + PAX + GATE,data = df_train, family = "binomial")
+summary(fit1)
+
+#2b
+cutoff=0.5
+pred_train<-ifelse(predict(fit1,df_train,type = "response") > cutoff,1,0)
+pred_1 <-predict(fit1,df_test,type="response")
+pred_test<-ifelse(pred_1>cutoff,1,0)
+confusion_train<-table(df_train$SW, pred_train)
+rownames(confusion_train)<-c("SW = No","SW=Yes")
+colnames(confusion_train)<-c("SW = No","SW=Yes")
+confusion_train
+
+confusion_test<-table(df_test$SW, pred_test)
+rownames(confusion_test)<-c("SW = No","SW=Yes")
+colnames(confusion_test)<-c("SW = No","SW=Yes")
+confusion_test
+
+(sensitivity_tr1<-sum(pred_train==1 & df_train$SW_Yes==1)/sum(df_train$SW_Yes==1))
+(specificity_tr1<-sum(pred_train==0 & df_train$SW_Yes==0)/sum(df_train$SW_Yes==0))
+(accuracy_tr1<-sum(df_train$SW_Yes==pred_train)/nrow(df_train))
+(error.rate_tr1<-1-accuracy_tr1)
+
+(sensitivity_te1<-sum(pred_test==1 & df_test$SW_Yes==1)/sum(df_test$SW_Yes==1))
+(specificity_te1<-sum(pred_test==0 & df_test$SW_Yes==0)/sum(df_test$SW_Yes==0))
+(accuracy_te1<-sum(df_test$SW_Yes==pred_test)/nrow(df_test))
+(error.rate_te1<-1-accuracy_te1)
+```
+```{r}
+#3a
+library(neuralnet)
+set.seed(13)
+nn <- neuralnet(SW~VACATION+SLOT+DISTANCE+FARE+HI+GATE+PAX, data=df_train, hidden=c(4), err.fct = "ce", linear.output = F,stepmax = 1e6,lifesign = "minimal")
+nn$result.matrix
+```
+```{r}
+plot(nn)
+```
+```{r}
+#3b
+prob_train<-compute(nn, df_train)$net.result
+predict_tr <- ifelse(prob_train>0.5,1,0)
+confusion_tr<-table(df_train$SW,predict_tr)
+confusion_tr
+
+prob_test<-compute(nn, df_test)$net.result
+predict_te <- ifelse(prob_test>0.5,1,0)
+confusion_te<-table(df_test$SW,predict_te)
+confusion_te
+#3c
+(sensitivity.tr2<-confusion_tr[2,2]/(sum(confusion_tr[2,1],confusion_tr[2,2])))
+(specificity.tr2<-confusion_tr[1,1]/(sum(confusion_tr[1,2],confusion_tr[1,1])))
+(accuracy_tr2<-(sum(confusion_tr[2,2],confusion_tr[1,1]))/nrow(df_train))
+(error.rate_tr2<-1-accuracy_tr2)
+
+(sensitivity.te2<-confusion_te[2,2]/(sum(confusion_te[2,1],confusion_te[2,2])))
+(specificity.te2<-confusion_te[1,1]/(sum(confusion_te[1,2],confusion_te[1,1])))
+(accuracy_te2<-(sum(confusion_te[2,2],confusion_te[1,1]))/nrow(df_test))
+(error.rate_te2<-1-accuracy_te2)
+
+#4a
+nn_train_error<-NULL
+nn_test_error<-NULL
+for (x in 0:7){
+nn_train <- neuralnet(SW~VACATION+SLOT+DISTANCE+FARE+HI+GATE+PAX, data=df_train, hidden=c(x), err.fct = "ce", linear.output = F, lifesign = "minimal",stepmax = 1e6)
+prob_train1<-compute(nn_train,df_train)$net.result
+predict_tr <- ifelse(prob_train1>0.5,1,0)
+accuracy_train1 <- ((sum(predict_tr==0 & df_train$SW==0))+(sum(predict_tr==1 & df_train$SW==1)))/(sum(df_train$SW==1)+sum(df_train$SW==0))
+nn_train_error[x+1]<-1-accuracy_train1
+prob_test1<-compute(nn_train,df_test)$net.result
+predict_te <- ifelse(prob_test1>0.5,1,0)
+accuracy_test1 <- ((sum(predict_te==0 & df_test$SW==0))+(sum(predict_te==1 & df_test$SW==1)))/(sum(df_test$SW==1)+sum(df_test$SW==0))
+nn_test_error[x+1]<-1-accuracy_test1
+}
+print(nn_train_error)
+print(nn_test_error)
+
+
+#4b
+nn_train_error1<-NULL
+nn_test_error1<-NULL
+for (x in 1:4){
+  nn_train1<-neuralnet(SW~VACATION+SLOT+DISTANCE+FARE+HI+GATE+PAX, data=df_train, hidden=c(4,x), err.fct = "ce", linear.output = F, lifesign = "minimal",stepmax=1e8)
+prob_train2<-compute(nn_train1,df_train)$net.result
+predict_tr <- ifelse(prob_train2>0.5,1,0)
+accuracy_train2 <- ((sum(predict_tr==0 & df_train$SW==0))+(sum(predict_tr==1 & df_train$SW==1)))/(sum(df_train$SW==1)+sum(df_train$SW==0))
+nn_train_error1[x]<-1-accuracy_train2
+
+prob_test2<-compute(nn_train1,df_test)$net.result
+predict_te <- ifelse(prob_test2>0.5,1,0)
+accuracy_test2 <- ((sum(predict_te==0 & df_test$SW==0))+(sum(predict_te==1 & df_test$SW==1)))/(sum(df_test$SW==1)+sum(df_test$SW==0))
+nn_test_error1[x]<-1-accuracy_test2
+
+}
+print(nn_train_error1)
+print(nn_test_error1)
+
+#4e
+rm(nn1)
+nn1<-neuralnet(SW~VACATION+SLOT+DISTANCE+FARE+HI+GATE+PAX, data=df_train, hidden=c(4,1), err.fct = "ce", linear.output = F, lifesign = "minimal",stepmax=1e7)
+prob1=compute(nn1,df_test[-8])
+prob1.result<-prob1$net.result
+detach(package:neuralnet,unload=T)
+library(ROCR)
+data("ROCR.simple")
+cutoff <- seq(0, 1, length = 100)
+fpr <- numeric(100)
+tpr <- numeric(100)
+nn.pred<-prediction(prob1.result,df_test$SW)
+pref<-performance(nn.pred,"tpr","fpr")
+
+roc.table_test <- data.frame(Cutoff = cutoff, FPR = fpr,TPR = tpr)
+Actual_test <- df_test$SW
+for (i in 1:100) {
+  roc.table_test$FPR[i] <- sum(pred_1 > cutoff[i] & Actual_test == "0")/sum(Actual_test == "0")
+  roc.table_test$TPR[i] <- sum(pred_1 > cutoff[i] & Actual_test == "1")/sum(Actual_test == "1")
+}
+```
+```{r}
+plot(TPR ~ FPR, data = roc.table_test, type= "o",col="green",lty=2)
+abline(a = 0, b = 1, lty = 2,col="red")
+plot(pref,col="blue",type="o",lty=2,add=TRUE)
+legend(0.7,0.7,c("NN","Logistic"),lty= c(1,1),lwd = c(1.5,1.5),col = c("blue","green"))
+```
+```{r}
+#5
+fit2<-lm(FARE ~ SW + VACATION + SLOT + DISTANCE + HI + GATE + PAX,data = df_train)
+summary(fit2)
+predicttrain <- predict(fit2, newdata=df_train)
+rmse(df_train$FARE,predicttrain)
+
+predicttest <- predict(fit2, newdata=df_test)
+rmse(df_test$FARE,predicttest)
+
+#Question 5b
+library(neuralnet)
+set.seed(13)
+nn_5 <- neuralnet(FARE ~ SW + VACATION + SLOT + DISTANCE + HI + GATE + PAX, data=df_train, hidden=c(4), err.fct = "sse", linear.output = TRUE)
+```
+```{r}
+plot(nn_5)
+```
+```{r}
+#Question 5c
+predprobnn_train <- compute(nn_5, df_train[-18])$net.result
+rmse(df_train$FARE,predprobnn_train)
+
+predprobnn_test <- compute(nn_5, df_test)$net.result
+rmse(df_test$FARE,predprobnn_test)
+
+errorRate_Train_nn <- NULL
+errorRate_Test_nn <- NULL
+for(x in 0:7){
+  nn_5da <- neuralnet(FARE ~ SW + VACATION + SLOT + DISTANCE + HI + GATE + PAX, data=df_train, hidden=c(x), err.fct = "sse", linear.output = TRUE, lifesign = "minimal")
+  predprobnn_train <- compute(nn_5da, df_train)$net.result
+  errorRate_Train_nn[x+1] <- rmse(df_train$FARE,predprobnn_train)
+  
+  predprobnn_test <- compute(nn_5da, df_test)$net.result
+  errorRate_Test_nn[x+1] <- rmse(df_test$FARE,predprobnn_test)
+}
+print(errorRate_Train_nn)
+print(errorRate_Test_nn)
+
+errorRate_Train_nn1 <- NULL
+errorRate_Test_nn1 <- NULL
+for(x in 1:4){
+  nn_5dc <- neuralnet(FARE ~ SW + VACATION + SLOT + DISTANCE + HI + GATE + PAX, data=df_train, hidden=c(4,x), err.fct = "sse", linear.output = TRUE, lifesign = "minimal")
+  predprobnn_train1 <- compute(nn_5dc, df_train)$net.result
+  errorRate_Train_nn1[x] <- rmse(df_train$FARE,predprobnn_train1)
+  
+  predprobnn_test1 <- compute(nn_5dc, df_test)$net.result
+  errorRate_Test_nn1[x] <- rmse(df_test$FARE,predprobnn_test1)
+}
+print(errorRate_Train_nn1)
+print(errorRate_Test_nn1)
+
+```
